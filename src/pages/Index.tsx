@@ -5,35 +5,43 @@ import { SignupForm } from "@/components/auth/SignupForm";
 import { Dashboard } from "@/pages/Dashboard";
 import { Button } from "@/components/ui/button";
 import { Bell, FileText, Calendar, HelpCircle, Briefcase, User } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import heroImage from "@/assets/hero-education.jpg";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'home' | 'login' | 'signup' | 'dashboard'>('home');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { user, loading, signOut } = useAuth();
 
-  // Check if user is already logged in
+  // Auto navigate to dashboard if user is logged in
   useEffect(() => {
-    const student = localStorage.getItem("student");
-    if (student) {
-      const parsedStudent = JSON.parse(student);
-      if (parsedStudent.isAuthenticated) {
-        setIsAuthenticated(true);
-        setCurrentView('dashboard');
-      }
+    if (user) {
+      setCurrentView('dashboard');
+    } else {
+      setCurrentView('home');
     }
-  }, []);
+  }, [user]);
 
   const handleLogin = () => {
-    setIsAuthenticated(true);
     setCurrentView('dashboard');
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await signOut();
     setCurrentView('home');
   };
 
-  if (currentView === 'dashboard' && isAuthenticated) {
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-subtle">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'dashboard' && user) {
     return <Dashboard onLogout={handleLogout} />;
   }
 

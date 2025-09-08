@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { User, Mail, Lock, Calendar, ArrowLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface SignupFormProps {
   onBack: () => void;
@@ -22,7 +22,7 @@ export const SignupForm = ({ onBack, onSuccess, onSwitchToLogin }: SignupFormPro
     password: ""
   });
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const { signUp } = useAuth();
 
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -32,27 +32,17 @@ export const SignupForm = ({ onBack, onSuccess, onSwitchToLogin }: SignupFormPro
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate registration
-    setTimeout(() => {
-      if (Object.values(formData).every(field => field !== "")) {
-        localStorage.setItem("student", JSON.stringify({
-          ...formData,
-          isAuthenticated: true
-        }));
-        toast({
-          title: "Account Created!",
-          description: "Welcome to EduPortal. Redirecting to dashboard...",
-        });
-        onSuccess();
-      } else {
-        toast({
-          title: "Error",
-          description: "Please fill in all fields.",
-          variant: "destructive",
-        });
-      }
-      setIsLoading(false);
-    }, 1000);
+    const { error } = await signUp(formData.email, formData.password, {
+      name: formData.name,
+      age: parseInt(formData.age),
+      gender: formData.gender
+    });
+
+    if (!error) {
+      onSuccess();
+    }
+    
+    setIsLoading(false);
   };
 
   return (

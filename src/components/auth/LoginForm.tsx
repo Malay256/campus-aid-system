@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, Lock, ArrowLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface LoginFormProps {
   onBack: () => void;
@@ -16,34 +16,19 @@ export const LoginForm = ({ onBack, onSuccess, onSwitchToSignup }: LoginFormProp
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const { signIn } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate authentication
-    setTimeout(() => {
-      if (email && password) {
-        localStorage.setItem("student", JSON.stringify({
-          name: "John Doe",
-          email: email,
-          isAuthenticated: true
-        }));
-        toast({
-          title: "Welcome back!",
-          description: "Login successful. Redirecting to dashboard...",
-        });
-        onSuccess();
-      } else {
-        toast({
-          title: "Error",
-          description: "Please fill in all fields.",
-          variant: "destructive",
-        });
-      }
-      setIsLoading(false);
-    }, 1000);
+    const { error } = await signIn(email, password);
+    
+    if (!error) {
+      onSuccess();
+    }
+    
+    setIsLoading(false);
   };
 
   return (

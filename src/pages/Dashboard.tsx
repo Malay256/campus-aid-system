@@ -7,7 +7,7 @@ import { EventsPage } from "@/components/dashboard/EventsPage";
 import { QueriesPage } from "@/components/dashboard/QueriesPage";
 import { StudentToolsPage } from "@/components/dashboard/StudentToolsPage";
 import { ProfilePage } from "@/components/dashboard/ProfilePage";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface DashboardProps {
   onLogout: () => void;
@@ -15,22 +15,10 @@ interface DashboardProps {
 
 export const Dashboard = ({ onLogout }: DashboardProps) => {
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [studentData, setStudentData] = useState<any>(null);
-  const { toast } = useToast();
+  const { user, profile, signOut } = useAuth();
 
-  useEffect(() => {
-    const student = localStorage.getItem("student");
-    if (student) {
-      setStudentData(JSON.parse(student));
-    }
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem("student");
-    toast({
-      title: "Logged out successfully",
-      description: "See you soon!",
-    });
+  const handleLogout = async () => {
+    await signOut();
     onLogout();
   };
 
@@ -39,7 +27,7 @@ export const Dashboard = ({ onLogout }: DashboardProps) => {
       case "dashboard":
         return (
           <DashboardHome
-            studentName={studentData?.name || "Student"}
+            studentName={profile?.name || user?.email?.split('@')[0] || "Student"}
             onNavigate={setActiveTab}
           />
         );
@@ -54,18 +42,18 @@ export const Dashboard = ({ onLogout }: DashboardProps) => {
       case "tools":
         return <StudentToolsPage />;
       case "profile":
-        return <ProfilePage studentData={studentData} />;
+        return <ProfilePage studentData={profile} />;
       default:
         return (
           <DashboardHome
-            studentName={studentData?.name || "Student"}
+            studentName={profile?.name || user?.email?.split('@')[0] || "Student"}
             onNavigate={setActiveTab}
           />
         );
     }
   };
 
-  if (!studentData) {
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-subtle">
         <div className="text-center">
