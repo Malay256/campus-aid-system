@@ -16,6 +16,7 @@ interface DashboardProps {
 export const Dashboard = ({ onLogout }: DashboardProps) => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const { user, profile, signOut } = useAuth();
+  const { isAdmin } = useRole();
 
   const handleLogout = async () => {
     await signOut();
@@ -43,6 +44,13 @@ export const Dashboard = ({ onLogout }: DashboardProps) => {
         return <StudentToolsPage />;
       case "profile":
         return <ProfilePage studentData={profile} />;
+      case "admin":
+        return isAdmin ? <AdminPanel /> : (
+          <DashboardHome
+            studentName={profile?.name || user?.email?.split('@')[0] || "Student"}
+            onNavigate={setActiveTab}
+          />
+        );
       default:
         return (
           <DashboardHome

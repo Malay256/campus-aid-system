@@ -4,83 +4,64 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Download, Search, Filter, Upload, BookOpen, Video, FileImage } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useRole } from "@/hooks/useRole";
+import { toast } from "sonner";
 
-const materials = [
-  {
-    id: 1,
-    title: "Calculus - Differentiation Notes",
-    subject: "Mathematics",
-    type: "PDF",
-    size: "2.4 MB",
-    uploadedBy: "Dr. Smith",
-    uploadDate: "2024-01-15",
-    downloads: 45,
-    icon: FileText
-  },
-  {
-    id: 2,
-    title: "Data Structures - Arrays and Linked Lists",
-    subject: "Computer Science",
-    type: "PDF", 
-    size: "1.8 MB",
-    uploadedBy: "Prof. Johnson",
-    uploadDate: "2024-01-14",
-    downloads: 32,
-    icon: FileText
-  },
-  {
-    id: 3,
-    title: "Organic Chemistry Lab Manual",
-    subject: "Chemistry",
-    type: "PDF",
-    size: "5.2 MB", 
-    uploadedBy: "Dr. Wilson",
-    uploadDate: "2024-01-13",
-    downloads: 28,
-    icon: FileText
-  },
-  {
-    id: 4,
-    title: "Physics Practical Video - Wave Motion",
-    subject: "Physics", 
-    type: "Video",
-    size: "125 MB",
-    uploadedBy: "Prof. Davis",
-    uploadDate: "2024-01-12", 
-    downloads: 67,
-    icon: Video
-  },
-  {
-    id: 5,
-    title: "English Literature - Shakespeare Analysis",
-    subject: "English",
-    type: "PDF",
-    size: "3.1 MB",
-    uploadedBy: "Dr. Brown",
-    uploadDate: "2024-01-11",
-    downloads: 19,
-    icon: FileText
-  },
-  {
-    id: 6,
-    title: "Circuit Diagrams - Electronics", 
-    subject: "Electronics",
-    type: "Image",
-    size: "950 KB",
-    uploadedBy: "Prof. Lee",
-    uploadDate: "2024-01-10",
-    downloads: 41,
-    icon: FileImage
-  }
-];
-
-const subjects = ["All Subjects", "Mathematics", "Computer Science", "Physics", "Chemistry", "English", "Electronics"];
+type StudyMaterial = {
+  id: string;
+  title: string;
+  subject: string;
+  type: string;
+  size: string;
+  file_path: string | null;
+  created_at: string;
+  downloads: number;
+  uploaded_by: string | null;
+  icon?: any;
+};
 
 export const StudyMaterialsPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("All Subjects");
-  const [filteredMaterials, setFilteredMaterials] = useState(materials);
+  const [materials, setMaterials] = useState<StudyMaterial[]>([]);
+  const [filteredMaterials, setFilteredMaterials] = useState<StudyMaterial[]>([]);
+  const [subjects, setSubjects] = useState<string[]>(["All Subjects"]);
+  const [loading, setLoading] = useState(true);
+  const { isAdmin } = useRole();
+
+  useEffect(() => {
+    fetchMaterials();
+  }, []);
+
+  const fetchMaterials = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('study_materials')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const materialsWithIcons = data.map(material => ({
+        ...material,
+        icon: getFileIcon(material.type)
+      }));
+
+      setMaterials(materialsWithIcons);
+      setFilteredMaterials(materialsWithIcons);
+
+      // Extract unique subjects
+      const uniqueSubjects = ["All Subjects", ...new Set(data.map(m => m.subject))];
+      setSubjects(uniqueSubjects);
+    } catch (error: any) {
+      toast.error('Failed to fetch study materials');
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -107,6 +88,54 @@ export const StudyMaterialsPage = () => {
     }
     
     setFilteredMaterials(filtered);
+  };
+
+  const getFileIcon = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'video':
+        return Video;
+      case 'image':
+        return FileImage;
+      default:
+        return FileText;
+    }
+  };
+
+  const handleDownload = async (material: StudyMaterial) => {
+    if (!material.file_path) {
+      toast.error('File not available for download');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('study-materials')
+        .download(material.file_path);
+
+      if (error) throw error;
+
+      // Create download link
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = material.title;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Increment download count
+      await supabase
+        .from('study_materials')
+        .update({ downloads: material.downloads + 1 })
+        .eq('id', material.id);
+
+      // Refresh materials
+      fetchMaterials();
+    } catch (error: any) {
+      toast.error('Failed to download file');
+      console.error('Download error:', error);
+    }
   };
 
   const getFileTypeColor = (type: string) => {
@@ -136,10 +165,12 @@ export const StudyMaterialsPage = () => {
           </div>
         </div>
         
-        <Button className="bg-gradient-primary border-0">
-          <Upload className="h-4 w-4 mr-2" />
-          Upload Material
-        </Button>
+        {isAdmin && (
+          <Button className="bg-gradient-primary border-0">
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Material
+          </Button>
+        )}
       </div>
 
       {/* Search and Filter */}
@@ -171,45 +202,55 @@ export const StudyMaterialsPage = () => {
       </Card>
 
       {/* Materials Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {filteredMaterials.map((material) => {
-          const Icon = material.icon;
-          return (
-            <Card key={material.id} className="shadow-soft hover:shadow-medium transition-all duration-300">
-              <CardHeader className="pb-3">
-                <div className="flex items-start space-x-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <Icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg leading-tight">{material.title}</CardTitle>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary">{material.subject}</Badge>
-                      <Badge className={getFileTypeColor(material.type)}>{material.type}</Badge>
+      {loading ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">Loading study materials...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {filteredMaterials.map((material) => {
+            const Icon = material.icon;
+            return (
+              <Card key={material.id} className="shadow-soft hover:shadow-medium transition-all duration-300">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start space-x-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg leading-tight">{material.title}</CardTitle>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="secondary">{material.subject}</Badge>
+                        <Badge className={getFileTypeColor(material.type)}>{material.type}</Badge>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-3">
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>Uploaded by: <span className="font-medium">{material.uploadedBy}</span></p>
-                  <div className="flex items-center justify-between">
-                    <span>Size: {material.size}</span>
-                    <span>Downloads: {material.downloads}</span>
-                  </div>
-                  <p>Date: {material.uploadDate}</p>
-                </div>
+                </CardHeader>
                 
-                <Button className="w-full" variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                <CardContent className="space-y-3">
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span>Size: {material.size}</span>
+                      <span>Downloads: {material.downloads}</span>
+                    </div>
+                    <p>Date: {new Date(material.created_at).toLocaleDateString()}</p>
+                  </div>
+                  
+                  <Button 
+                    className="w-full" 
+                    variant="outline"
+                    onClick={() => handleDownload(material)}
+                    disabled={!material.file_path}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {filteredMaterials.length === 0 && (
         <Card className="shadow-soft">

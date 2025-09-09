@@ -1,17 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { 
-  BookOpen, 
-  Home, 
-  Bell, 
-  FileText, 
-  HelpCircle, 
-  Calendar, 
-  User, 
-  Settings,
-  LogOut,
-  Briefcase
-} from "lucide-react";
+import { Home, Bell, BookOpen, Calendar, HelpCircle, Wrench, User, LogOut, Settings } from "lucide-react";
+import { useRole } from "@/hooks/useRole";
 
 interface SidebarProps {
   activeTab: string;
@@ -19,17 +9,19 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
-const menuItems = [
-  { id: "dashboard", label: "Dashboard", icon: Home },
-  { id: "notices", label: "Notices", icon: Bell },
-  { id: "materials", label: "Study Materials", icon: FileText },
-  { id: "events", label: "Events", icon: Calendar },
-  { id: "queries", label: "Query Help", icon: HelpCircle },
-  { id: "tools", label: "Student Tools", icon: Briefcase },
-  { id: "profile", label: "Profile", icon: User },
-];
-
 export const Sidebar = ({ activeTab, onTabChange, onLogout }: SidebarProps) => {
+  const { isAdmin } = useRole();
+
+  const menuItems = [
+    { id: "dashboard", label: "Dashboard", icon: Home },
+    { id: "notices", label: "Notices", icon: Bell },
+    { id: "materials", label: "Study Materials", icon: BookOpen },
+    { id: "events", label: "Events", icon: Calendar },
+    { id: "queries", label: "Help Desk", icon: HelpCircle },
+    { id: "tools", label: "Student Tools", icon: Wrench },
+    { id: "profile", label: "Profile", icon: User },
+    ...(isAdmin ? [{ id: "admin", label: "Admin Panel", icon: Settings }] : []),
+  ];
   return (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       {/* Logo */}

@@ -2,58 +2,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { HelpCircle, Plus, MessageSquare, Clock, CheckCircle, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { HelpCircle, Plus, CheckCircle, Clock, AlertCircle, MessageSquare } from "lucide-react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
-const queries = [
-  {
-    id: 1,
-    title: "Assignment Submission Issue",
-    description: "I'm unable to submit my assignment through the portal. Getting an error message about file size.",
-    category: "Technical",
-    status: "pending",
-    submitDate: "2024-01-15",
-    reply: null
-  },
-  {
-    id: 2,
-    title: "Course Registration Query", 
-    description: "Can I still register for the Advanced Mathematics course? The deadline shows as passed but I heard it was extended.",
-    category: "Academic",
-    status: "resolved",
-    submitDate: "2024-01-14",
-    reply: "Yes, the deadline has been extended to January 25th. Please visit the academic office to complete your registration."
-  },
-  {
-    id: 3,
-    title: "Library Book Renewal",
-    description: "I need to renew my library books but the online system is not allowing me to do so. My student ID is working fine elsewhere.",
-    category: "Library", 
-    status: "pending",
-    submitDate: "2024-01-13",
-    reply: null
-  },
-  {
-    id: 4,
-    title: "Exam Hall Ticket",
-    description: "I haven't received my exam hall ticket yet. My classmates have already got theirs. Should I be worried?",
-    category: "Examination",
-    status: "resolved", 
-    submitDate: "2024-01-12",
-    reply: "Hall tickets are sent in batches. Yours will be available by January 18th. You can also download it from the student portal."
-  }
-];
+type Query = {
+  id: string;
+  subject: string;
+  description: string;
+  category: string;
+  status: string;
+  priority: string;
+  response: string | null;
+  created_at: string;
+  user_id: string;
+};
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case "resolved":
-      return "bg-success text-success-foreground";
-    case "pending":
+    case "open":
       return "bg-warning text-warning-foreground";
     case "in-progress":
       return "bg-primary text-primary-foreground";
+    case "resolved":
+      return "bg-success text-success-foreground";
     default:
       return "bg-muted text-muted-foreground";
   }
@@ -61,30 +38,81 @@ const getStatusColor = (status: string) => {
 
 const getStatusIcon = (status: string) => {
   switch (status) {
-    case "resolved":
-      return <CheckCircle className="h-4 w-4" />;
-    case "pending":
+    case "open":
       return <Clock className="h-4 w-4" />;
     case "in-progress":
       return <AlertCircle className="h-4 w-4" />;
+    case "resolved":
+      return <CheckCircle className="h-4 w-4" />;
     default:
-      return <MessageSquare className="h-4 w-4" />;
+      return <HelpCircle className="h-4 w-4" />;
   }
 };
 
 export const QueriesPage = () => {
-  const [showNewQuery, setShowNewQuery] = useState(false);
+  const [showNewQueryForm, setShowNewQueryForm] = useState(false);
+  const [queries, setQueries] = useState<Query[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  
   const [newQuery, setNewQuery] = useState({
-    title: "",
-    description: "",
-    category: ""
+    subject: '',
+    category: '',
+    description: ''
   });
 
-  const handleSubmitQuery = () => {
-    // Here you would implement the query submission logic
-    console.log("Submitting query:", newQuery);
-    setShowNewQuery(false);
-    setNewQuery({ title: "", description: "", category: "" });
+  useEffect(() => {
+    if (user) {
+      fetchQueries();
+    }
+  }, [user]);
+
+  const fetchQueries = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('queries')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setQueries(data || []);
+    } catch (error: any) {
+      toast.error('Failed to fetch queries');
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitQuery = async () => {
+    if (!user || !newQuery.subject || !newQuery.category || !newQuery.description) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('queries')
+        .insert({
+          subject: newQuery.subject,
+          category: newQuery.category,
+          description: newQuery.description,
+          user_id: user.id
+        });
+
+      if (error) throw error;
+
+      toast.success('Query submitted successfully!');
+      setNewQuery({ subject: '', category: '', description: '' });
+      setShowNewQueryForm(false);
+      fetchQueries();
+    } catch (error: any) {
+      toast.error('Failed to submit query');
+      console.error('Error:', error);
+    }
   };
 
   return (
@@ -96,14 +124,14 @@ export const QueriesPage = () => {
             <HelpCircle className="h-6 w-6 text-success" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Query Help Desk</h1>
+            <h1 className="text-2xl font-bold">Help Desk</h1>
             <p className="text-muted-foreground">Submit queries and get assistance</p>
           </div>
         </div>
         
         <Button 
           className="bg-gradient-primary border-0"
-          onClick={() => setShowNewQuery(!showNewQuery)}
+          onClick={() => setShowNewQueryForm(!showNewQueryForm)}
         >
           <Plus className="h-4 w-4 mr-2" />
           New Query
@@ -111,7 +139,7 @@ export const QueriesPage = () => {
       </div>
 
       {/* New Query Form */}
-      {showNewQuery && (
+      {showNewQueryForm && (
         <Card className="shadow-soft border-primary/20">
           <CardHeader>
             <CardTitle className="text-lg">Submit New Query</CardTitle>
@@ -119,38 +147,38 @@ export const QueriesPage = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Subject</label>
+              <Label htmlFor="subject">Subject</Label>
               <Input
-                placeholder="Brief title for your query"
-                value={newQuery.title}
-                onChange={(e) => setNewQuery({ ...newQuery, title: e.target.value })}
+                id="subject"
+                placeholder="Enter query title"
+                value={newQuery.subject}
+                onChange={(e) => setNewQuery(prev => ({ ...prev, subject: e.target.value }))}
               />
             </div>
             
             <div className="space-y-2">
-              <label className="text-sm font-medium">Category</label>
-              <Select onValueChange={(value) => setNewQuery({ ...newQuery, category: value })}>
+              <Label htmlFor="category">Category</Label>
+              <Select value={newQuery.category} onValueChange={(value) => setNewQuery(prev => ({ ...prev, category: value }))}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="academic">Academic</SelectItem>
                   <SelectItem value="technical">Technical</SelectItem>
-                  <SelectItem value="library">Library</SelectItem>
-                  <SelectItem value="examination">Examination</SelectItem>
-                  <SelectItem value="fees">Fees & Finance</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  <SelectItem value="academic">Academic</SelectItem>
+                  <SelectItem value="administrative">Administrative</SelectItem>
+                  <SelectItem value="general">General</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
+              <Label htmlFor="description">Description</Label>
               <Textarea
-                placeholder="Provide detailed information about your query"
-                value={newQuery.description}
-                onChange={(e) => setNewQuery({ ...newQuery, description: e.target.value })}
+                id="description"
+                placeholder="Describe your query in detail..."
                 rows={4}
+                value={newQuery.description}
+                onChange={(e) => setNewQuery(prev => ({ ...prev, description: e.target.value }))}
               />
             </div>
             
@@ -158,7 +186,7 @@ export const QueriesPage = () => {
               <Button onClick={handleSubmitQuery} className="bg-gradient-primary border-0">
                 Submit Query
               </Button>
-              <Button variant="outline" onClick={() => setShowNewQuery(false)}>
+              <Button variant="outline" onClick={() => setShowNewQueryForm(false)}>
                 Cancel
               </Button>
             </div>
@@ -167,56 +195,68 @@ export const QueriesPage = () => {
       )}
 
       {/* Queries List */}
-      <div className="space-y-4">
-        {queries.map((query) => (
-          <Card key={query.id} className="shadow-soft hover:shadow-medium transition-all duration-300">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="space-y-2">
-                  <CardTitle className="text-lg">{query.title}</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{query.category}</Badge>
-                    <Badge className={getStatusColor(query.status)}>
-                      {getStatusIcon(query.status)}
-                      <span className="ml-1 capitalize">{query.status}</span>
-                    </Badge>
+      {loading ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">Loading queries...</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {queries.map((query) => (
+            <Card key={query.id} className="shadow-soft hover:shadow-medium transition-all duration-300">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2">
+                    <CardTitle className="text-lg">{query.subject}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{query.category}</Badge>
+                      <Badge className={getStatusColor(query.status)}>
+                        <div className="flex items-center gap-1">
+                          {getStatusIcon(query.status)}
+                          {query.status}
+                        </div>
+                      </Badge>
+                      <Badge 
+                        variant="outline" 
+                        className={query.priority === 'high' ? 'border-destructive text-destructive' : ''}
+                      >
+                        {query.priority} priority
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Submitted on {new Date(query.created_at).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
-                <span className="text-sm text-muted-foreground">{query.submitDate}</span>
-              </div>
-            </CardHeader>
-            
-            <CardContent className="space-y-4">
-              <div>
-                <h4 className="font-medium text-sm mb-1">Your Query:</h4>
-                <p className="text-muted-foreground text-sm leading-relaxed">{query.description}</p>
-              </div>
+              </CardHeader>
               
-              {query.reply && (
-                <div className="bg-success/5 border border-success/20 rounded-lg p-3">
-                  <h4 className="font-medium text-sm mb-1 text-success">Response:</h4>
-                  <p className="text-sm leading-relaxed">{query.reply}</p>
-                </div>
-              )}
-              
-              {query.status === "pending" && (
-                <div className="bg-warning/5 border border-warning/20 rounded-lg p-3">
-                  <p className="text-sm text-warning">⏳ Your query is being reviewed. We'll respond within 24-48 hours.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {queries.length === 0 && (
-        <Card className="shadow-soft">
-          <CardContent className="py-12 text-center">
-            <HelpCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-lg font-medium text-muted-foreground">No queries yet</p>
-            <p className="text-sm text-muted-foreground">Click "New Query" to submit your first question</p>
-          </CardContent>
-        </Card>
+              <CardContent className="space-y-3">
+                <p className="text-muted-foreground leading-relaxed">{query.description}</p>
+                
+                {query.response && (
+                  <div className="border-t pt-3">
+                    <div className="flex items-start space-x-2">
+                      <MessageSquare className="h-4 w-4 text-primary mt-1" />
+                      <div>
+                        <p className="text-sm font-medium text-primary">Admin Reply</p>
+                        <p className="text-sm text-muted-foreground mt-1">{query.response}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+          
+          {queries.length === 0 && (
+            <Card className="shadow-soft">
+              <CardContent className="py-12 text-center">
+                <HelpCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-lg font-medium text-muted-foreground">No queries yet</p>
+                <p className="text-sm text-muted-foreground">Submit your first query to get help</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );

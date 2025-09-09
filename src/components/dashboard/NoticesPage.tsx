@@ -1,53 +1,23 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Bell, Calendar, AlertCircle, Info, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-const notices = [
-  {
-    id: 1,
-    title: "Mid-term Examination Schedule Released",
-    content: "The mid-term examination schedule for all courses has been published. Please check the detailed timetable in the examination section.",
-    type: "important",
-    date: "2024-01-15",
-    time: "09:30 AM"
-  },
-  {
-    id: 2,
-    title: "Library Hours Extended During Exams", 
-    content: "The library will remain open 24/7 starting from January 20th to support students during the examination period.",
-    type: "info",
-    date: "2024-01-14",
-    time: "02:15 PM"
-  },
-  {
-    id: 3,
-    title: "Tech Fest 2024 Registration Open",
-    content: "Annual Tech Fest registration is now open! Join us for workshops, competitions, and networking opportunities. Limited seats available.",
-    type: "event",
-    date: "2024-01-13",
-    time: "11:45 AM"
-  },
-  {
-    id: 4,
-    title: "Campus WiFi Maintenance",
-    content: "The campus WiFi will undergo maintenance on January 18th from 2 AM to 6 AM. Alternative connection points will be available.",
-    type: "maintenance",
-    date: "2024-01-12",
-    time: "04:20 PM"
-  },
-  {
-    id: 5,
-    title: "New Course Registration Deadline Extended",
-    content: "Due to popular demand, the deadline for new course registration has been extended to January 25th. Contact academic office for assistance.",
-    type: "deadline",
-    date: "2024-01-11",
-    time: "01:30 PM"
-  }
-];
+type Notice = {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  priority: string;
+  created_at: string;
+  date: string;
+};
 
-const getNoticeIcon = (type: string) => {
-  switch (type) {
-    case "important":
+const getNoticeIcon = (category: string) => {
+  switch (category) {
+    case "academic":
       return <AlertCircle className="h-5 w-5 text-destructive" />;
     case "event":
       return <Calendar className="h-5 w-5 text-accent-purple" />;
@@ -60,10 +30,14 @@ const getNoticeIcon = (type: string) => {
   }
 };
 
-const getNoticeBadge = (type: string) => {
-  switch (type) {
-    case "important":
-      return <Badge variant="destructive">Important</Badge>;
+const getNoticeBadge = (category: string, priority: string) => {
+  if (priority === "high") {
+    return <Badge variant="destructive">High Priority</Badge>;
+  }
+  
+  switch (category) {
+    case "academic":
+      return <Badge variant="destructive">Academic</Badge>;
     case "event":
       return <Badge className="bg-accent-purple text-white">Event</Badge>;
     case "maintenance":
@@ -71,11 +45,34 @@ const getNoticeBadge = (type: string) => {
     case "deadline":
       return <Badge className="bg-success text-success-foreground">Deadline</Badge>;
     default:
-      return <Badge variant="secondary">Info</Badge>;
+      return <Badge variant="secondary">General</Badge>;
   }
 };
 
 export const NoticesPage = () => {
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchNotices();
+  }, []);
+
+  const fetchNotices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('notices')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setNotices(data || []);
+    } catch (error: any) {
+      toast.error('Failed to fetch notices');
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -90,38 +87,47 @@ export const NoticesPage = () => {
       </div>
 
       {/* Notices List */}
-      <div className="space-y-4">
-        {notices.map((notice) => (
-          <Card key={notice.id} className="shadow-soft hover:shadow-medium transition-all duration-300">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-3 flex-1">
-                  {getNoticeIcon(notice.type)}
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg leading-tight">{notice.title}</CardTitle>
-                    <div className="flex items-center space-x-2 mt-1">
-                      {getNoticeBadge(notice.type)}
-                      <span className="text-sm text-muted-foreground">
-                        {notice.date} at {notice.time}
-                      </span>
+      {loading ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">Loading notices...</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {notices.map((notice) => (
+            <Card key={notice.id} className="shadow-soft hover:shadow-medium transition-all duration-300">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start space-x-3 flex-1">
+                    {getNoticeIcon(notice.category)}
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg leading-tight">{notice.title}</CardTitle>
+                      <div className="flex items-center space-x-2 mt-1">
+                        {getNoticeBadge(notice.category, notice.priority)}
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(notice.created_at).toLocaleDateString()} at {new Date(notice.created_at).toLocaleTimeString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground leading-relaxed">{notice.content}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground leading-relaxed">{notice.content}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-      {/* Load More */}
-      <div className="text-center py-4">
-        <p className="text-sm text-muted-foreground">
-          Showing 5 most recent notices • <span className="text-primary cursor-pointer hover:underline">View all notices</span>
-        </p>
-      </div>
+      {notices.length === 0 && !loading && (
+        <Card className="shadow-soft">
+          <CardContent className="py-12 text-center">
+            <Bell className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-lg font-medium text-muted-foreground">No notices available</p>
+            <p className="text-sm text-muted-foreground">Check back later for updates</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
