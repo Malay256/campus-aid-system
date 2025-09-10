@@ -85,6 +85,38 @@ export type Database = {
         }
         Relationships: []
       }
+      file_access_logs: {
+        Row: {
+          access_method: string | null
+          accessed_at: string
+          file_id: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          access_method?: string | null
+          accessed_at?: string
+          file_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          access_method?: string | null
+          accessed_at?: string
+          file_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_access_logs_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "study_materials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notices: {
         Row: {
           category: string
@@ -192,6 +224,8 @@ export type Database = {
       }
       study_materials: {
         Row: {
+          access_id: string | null
+          access_password: string | null
           created_at: string
           downloads: number
           file_path: string | null
@@ -205,6 +239,8 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          access_id?: string | null
+          access_password?: string | null
           created_at?: string
           downloads?: number
           file_path?: string | null
@@ -218,6 +254,8 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          access_id?: string | null
+          access_password?: string | null
           created_at?: string
           downloads?: number
           file_path?: string | null

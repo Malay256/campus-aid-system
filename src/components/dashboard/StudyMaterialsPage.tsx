@@ -2,11 +2,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Download, Search, Filter, Upload, BookOpen, Video, FileImage } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { FileText, Download, Search, Filter, Upload, BookOpen, Video, FileImage, Lock, Key } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/hooks/useRole";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
 type StudyMaterial = {
@@ -19,6 +22,8 @@ type StudyMaterial = {
   created_at: string;
   downloads: number;
   uploaded_by: string | null;
+  access_id: string | null;
+  access_password: string | null;
   icon?: any;
 };
 
@@ -29,7 +34,13 @@ export const StudyMaterialsPage = () => {
   const [filteredMaterials, setFilteredMaterials] = useState<StudyMaterial[]>([]);
   const [subjects, setSubjects] = useState<string[]>(["All Subjects"]);
   const [loading, setLoading] = useState(true);
+  const [accessDialog, setAccessDialog] = useState<{ open: boolean, material: StudyMaterial | null }>({
+    open: false,
+    material: null
+  });
+  const [accessCredentials, setAccessCredentials] = useState({ id: '', password: '' });
   const { isAdmin } = useRole();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchMaterials();
@@ -107,10 +118,21 @@ export const StudyMaterialsPage = () => {
       return;
     }
 
+    // Check if material requires credentials
+    if (material.access_id && material.access_password) {
+      setAccessDialog({ open: true, material });
+      return;
+    }
+
+    // Direct download for public materials
+    await downloadFile(material);
+  };
+
+  const downloadFile = async (material: StudyMaterial) => {
     try {
       const { data, error } = await supabase.storage
         .from('study-materials')
-        .download(material.file_path);
+        .download(material.file_path!);
 
       if (error) throw error;
 
@@ -124,7 +146,15 @@ export const StudyMaterialsPage = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      // Increment download count
+      // Log access and increment download count
+      if (user) {
+        await supabase.from('file_access_logs').insert({
+          user_id: user.id,
+          file_id: material.id,
+          access_method: 'download'
+        });
+      }
+
       await supabase
         .from('study_materials')
         .update({ downloads: material.downloads + 1 })
@@ -132,10 +162,26 @@ export const StudyMaterialsPage = () => {
 
       // Refresh materials
       fetchMaterials();
+      toast.success('File downloaded successfully!');
     } catch (error: any) {
       toast.error('Failed to download file');
       console.error('Download error:', error);
     }
+  };
+
+  const handleCredentialSubmit = async () => {
+    if (!accessDialog.material) return;
+
+    const { material } = accessDialog;
+    
+    if (accessCredentials.id !== material.access_id || accessCredentials.password !== material.access_password) {
+      toast.error('Invalid credentials. Please check your Access ID and Password.');
+      return;
+    }
+
+    setAccessDialog({ open: false, material: null });
+    setAccessCredentials({ id: '', password: '' });
+    await downloadFile(material);
   };
 
   const getFileTypeColor = (type: string) => {
@@ -236,15 +282,22 @@ export const StudyMaterialsPage = () => {
                     <p>Date: {new Date(material.created_at).toLocaleDateString()}</p>
                   </div>
                   
-                  <Button 
-                    className="w-full" 
-                    variant="outline"
-                    onClick={() => handleDownload(material)}
-                    disabled={!material.file_path}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      className="flex-1" 
+                      variant="outline"
+                      onClick={() => handleDownload(material)}
+                      disabled={!material.file_path}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                    {material.access_id && material.access_password && (
+                      <div className="flex items-center">
+                        <Lock className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -261,6 +314,61 @@ export const StudyMaterialsPage = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Access Credentials Dialog */}
+      <Dialog open={accessDialog.open} onOpenChange={(open) => {
+        setAccessDialog({ open, material: accessDialog.material });
+        if (!open) setAccessCredentials({ id: '', password: '' });
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              Access Required
+            </DialogTitle>
+            <DialogDescription>
+              This file requires credentials to download. Please enter the Access ID and Password.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="credential-id">Access ID</Label>
+              <Input
+                id="credential-id"
+                placeholder="Enter Access ID"
+                value={accessCredentials.id}
+                onChange={(e) => setAccessCredentials(prev => ({ ...prev, id: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="credential-password">Password</Label>
+              <Input
+                id="credential-password"
+                type="password"
+                placeholder="Enter Password"
+                value={accessCredentials.password}
+                onChange={(e) => setAccessCredentials(prev => ({ ...prev, password: e.target.value }))}
+              />
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => setAccessDialog({ open: false, material: null })}
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="flex-1"
+                onClick={handleCredentialSubmit}
+                disabled={!accessCredentials.id || !accessCredentials.password}
+              >
+                Download
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

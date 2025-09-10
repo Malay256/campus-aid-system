@@ -7,13 +7,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
-import { Upload, FileText, Calendar, Bell, Users, Settings } from "lucide-react";
+import { Upload, FileText, Calendar, Bell, Users, Settings, Eye, EyeOff, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { AdminAnalytics } from "./AdminAnalytics";
 
 export const AdminPanel = () => {
   const [activeUpload, setActiveUpload] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const { user } = useAuth();
 
   // Study Material Upload
@@ -21,7 +24,10 @@ export const AdminPanel = () => {
     title: '',
     subject: '',
     type: 'PDF',
-    file: null as File | null
+    file: null as File | null,
+    access_id: '',
+    access_password: '',
+    require_credentials: false
   });
 
   // Notice Form
@@ -78,13 +84,23 @@ export const AdminPanel = () => {
           type: materialForm.type,
           file_path: filePath,
           size: `${(materialForm.file.size / (1024 * 1024)).toFixed(1)} MB`,
-          uploaded_by: user.id
+          uploaded_by: user.id,
+          access_id: materialForm.require_credentials ? materialForm.access_id : null,
+          access_password: materialForm.require_credentials ? materialForm.access_password : null
         });
 
       if (error) throw error;
 
       toast.success('Study material uploaded successfully!');
-      setMaterialForm({ title: '', subject: '', type: 'PDF', file: null });
+      setMaterialForm({ 
+        title: '', 
+        subject: '', 
+        type: 'PDF', 
+        file: null, 
+        access_id: '', 
+        access_password: '', 
+        require_credentials: false 
+      });
     } catch (error: any) {
       toast.error(`Failed to upload material: ${error.message}`);
     } finally {
@@ -169,10 +185,11 @@ export const AdminPanel = () => {
       </div>
 
       <Tabs defaultValue="materials" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="materials">Study Materials</TabsTrigger>
           <TabsTrigger value="notices">Notices</TabsTrigger>
           <TabsTrigger value="events">Events</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="materials" className="space-y-4">
@@ -234,6 +251,64 @@ export const AdminPanel = () => {
                     onChange={(e) => setMaterialForm(prev => ({ ...prev, file: e.target.files?.[0] || null }))}
                     required
                   />
+                </div>
+
+                {/* Access Control Section */}
+                <div className="space-y-4 border-t pt-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Require Access Credentials</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Students will need ID and password to access this file
+                      </p>
+                    </div>
+                    <Switch
+                      checked={materialForm.require_credentials}
+                      onCheckedChange={(checked) => setMaterialForm(prev => ({ ...prev, require_credentials: checked }))}
+                    />
+                  </div>
+
+                  {materialForm.require_credentials && (
+                    <div className="space-y-4 pl-4 border-l border-border">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="access_id">Access ID</Label>
+                          <Input
+                            id="access_id"
+                            placeholder="e.g., MATH101"
+                            value={materialForm.access_id}
+                            onChange={(e) => setMaterialForm(prev => ({ ...prev, access_id: e.target.value }))}
+                            required={materialForm.require_credentials}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="access_password">Access Password</Label>
+                          <div className="relative">
+                            <Input
+                              id="access_password"
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Enter password"
+                              value={materialForm.access_password}
+                              onChange={(e) => setMaterialForm(prev => ({ ...prev, access_password: e.target.value }))}
+                              required={materialForm.require_credentials}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              onClick={() => setShowPassword(!showPassword)}
+                            >
+                              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Students will need both the Access ID and Password to download this file.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <Button 
@@ -433,6 +508,10 @@ export const AdminPanel = () => {
               </form>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-4">
+          <AdminAnalytics />
         </TabsContent>
       </Tabs>
     </div>
