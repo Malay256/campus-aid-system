@@ -39,7 +39,14 @@ export const StudyMaterialsPage = () => {
     material: null
   });
   const [accessCredentials, setAccessCredentials] = useState({ id: '', password: '' });
-  const { isAdmin } = useRole();
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [newMaterial, setNewMaterial] = useState({
+    title: '',
+    subject: '',
+    type: 'PDF',
+    file: null as File | null
+  });
+  const [isUploading, setIsUploading] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -63,7 +70,6 @@ export const StudyMaterialsPage = () => {
       setMaterials(materialsWithIcons);
       setFilteredMaterials(materialsWithIcons);
 
-      // Extract unique subjects
       const uniqueSubjects = ["All Subjects", ...new Set(data.map(m => m.subject))];
       setSubjects(uniqueSubjects);
     } catch (error: any) {
@@ -118,13 +124,11 @@ export const StudyMaterialsPage = () => {
       return;
     }
 
-    // Check if material requires credentials
     if (material.access_id && material.access_password) {
       setAccessDialog({ open: true, material });
       return;
     }
 
-    // Direct download for public materials
     await downloadFile(material);
   };
 
@@ -136,7 +140,6 @@ export const StudyMaterialsPage = () => {
 
       if (error) throw error;
 
-      // Create download link
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
@@ -146,7 +149,6 @@ export const StudyMaterialsPage = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      // Log access and increment download count
       if (user) {
         await supabase.from('file_access_logs').insert({
           user_id: user.id,
@@ -160,7 +162,6 @@ export const StudyMaterialsPage = () => {
         .update({ downloads: material.downloads + 1 })
         .eq('id', material.id);
 
-      // Refresh materials
       fetchMaterials();
       toast.success('File downloaded successfully!');
     } catch (error: any) {
@@ -184,6 +185,47 @@ export const StudyMaterialsPage = () => {
     await downloadFile(material);
   };
 
+  const handleUserUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newMaterial.file) return;
+
+    setIsUploading(true);
+    try {
+      const file = newMaterial.file;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `user-uploads/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('study-materials')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { error: insertError } = await supabase
+        .from('study_materials')
+        .insert({
+          title: newMaterial.title,
+          subject: newMaterial.subject,
+          type: newMaterial.type,
+          file_path: filePath,
+          size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+          uploaded_by: user.id,
+        });
+
+      if (insertError) throw insertError;
+
+      toast.success('Material uploaded successfully!');
+      setNewMaterial({ title: '', subject: '', type: 'PDF', file: null });
+      setIsUploadDialogOpen(false);
+      fetchMaterials();
+    } catch (error: any) {
+      toast.error(`Failed to upload material: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const getFileTypeColor = (type: string) => {
     switch (type.toLowerCase()) {
       case "pdf":
@@ -199,7 +241,6 @@ export const StudyMaterialsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="p-3 bg-primary/10 rounded-lg">
@@ -211,15 +252,55 @@ export const StudyMaterialsPage = () => {
           </div>
         </div>
         
-        {isAdmin && (
-          <Button className="bg-gradient-primary border-0">
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Material
-          </Button>
-        )}
+        <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Material
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Upload a New Material</DialogTitle>
+              <DialogDescription>
+                This material will only be visible to you.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleUserUploadSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input id="title" placeholder="e.g., My Personal Notes" value={newMaterial.title} onChange={(e) => setNewMaterial(prev => ({ ...prev, title: e.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="subject">Subject</Label>
+                <Input id="subject" placeholder="e.g., Personal" value={newMaterial.subject} onChange={(e) => setNewMaterial(prev => ({ ...prev, subject: e.target.value }))} required />
+              </div>
+              <div className="space-y-2">
+                  <Label htmlFor="type">File Type</Label>
+                  <Select value={newMaterial.type} onValueChange={(value) => setNewMaterial(prev => ({ ...prev, type: value }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PDF">PDF</SelectItem>
+                      <SelectItem value="Video">Video</SelectItem>
+                      <SelectItem value="Image">Image</SelectItem>
+                      <SelectItem value="Document">Document</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              <div className="space-y-2">
+                <Label htmlFor="file">File</Label>
+                <Input id="file" type="file" onChange={(e) => setNewMaterial(prev => ({ ...prev, file: e.target.files?.[0] || null }))} required />
+              </div>
+              <Button type="submit" className="w-full" disabled={isUploading}>
+                {isUploading ? 'Uploading...' : 'Upload'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Search and Filter */}
       <Card className="shadow-soft">
         <CardContent className="p-4">
           <div className="flex flex-col md:flex-row gap-4">
@@ -232,7 +313,6 @@ export const StudyMaterialsPage = () => {
                 className="pl-10"
               />
             </div>
-            
             <Select value={selectedSubject} onValueChange={handleSubjectChange}>
               <SelectTrigger className="w-full md:w-48">
                 <SelectValue />
@@ -247,7 +327,6 @@ export const StudyMaterialsPage = () => {
         </CardContent>
       </Card>
 
-      {/* Materials Grid */}
       {loading ? (
         <div className="text-center py-8">
           <p className="text-muted-foreground">Loading study materials...</p>
@@ -272,7 +351,6 @@ export const StudyMaterialsPage = () => {
                     </div>
                   </div>
                 </CardHeader>
-                
                 <CardContent className="space-y-3">
                   <div className="text-sm text-muted-foreground space-y-1">
                     <div className="flex items-center justify-between">
@@ -281,7 +359,6 @@ export const StudyMaterialsPage = () => {
                     </div>
                     <p>Date: {new Date(material.created_at).toLocaleDateString()}</p>
                   </div>
-                  
                   <div className="flex gap-2">
                     <Button 
                       className="flex-1" 
@@ -305,17 +382,16 @@ export const StudyMaterialsPage = () => {
         </div>
       )}
 
-      {filteredMaterials.length === 0 && (
+      {filteredMaterials.length === 0 && !loading && (
         <Card className="shadow-soft">
           <CardContent className="py-12 text-center">
             <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-lg font-medium text-muted-foreground">No materials found</p>
-            <p className="text-sm text-muted-foreground">Try adjusting your search or filter criteria</p>
+            <p className="text-sm text-muted-foreground">Try adjusting your search or upload your own!</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Access Credentials Dialog */}
       <Dialog open={accessDialog.open} onOpenChange={(open) => {
         setAccessDialog({ open, material: accessDialog.material });
         if (!open) setAccessCredentials({ id: '', password: '' });
