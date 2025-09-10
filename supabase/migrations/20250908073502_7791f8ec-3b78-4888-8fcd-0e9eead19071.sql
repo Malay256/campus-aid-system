@@ -172,21 +172,3 @@ CREATE TRIGGER update_events_updated_at
 CREATE TRIGGER update_queries_updated_at
   BEFORE UPDATE ON public.queries
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
--- Insert sample data
-INSERT INTO public.notices (title, content, category, priority, date) VALUES
-('Welcome to New Semester', 'Welcome back students! The new semester begins on January 15th. Please check your course schedules and prepare accordingly.', 'academic', 'high', '2024-01-10'),
-('Library Hours Extended', 'Good news! Library hours have been extended during exam period. Open 24/7 from March 1st to March 15th.', 'facility', 'medium', '2024-01-08'),
-('Campus WiFi Maintenance', 'WiFi will be down for maintenance on January 20th from 2 AM to 6 AM. Plan your online activities accordingly.', 'technical', 'high', '2024-01-05');
-
-INSERT INTO public.study_materials (title, subject, type, size, uploader, downloads) VALUES
-('Data Structures Notes', 'Computer Science', 'PDF', '2.5 MB', 'Dr. Smith', 245),
-('Calculus Practice Problems', 'Mathematics', 'PDF', '1.8 MB', 'Prof. Johnson', 189),
-('Physics Lab Manual', 'Physics', 'PDF', '3.2 MB', 'Dr. Brown', 156),
-('Chemistry Formula Sheet', 'Chemistry', 'PDF', '1.2 MB', 'Prof. Davis', 278);
-
-INSERT INTO public.events (title, description, date, time, location, category, max_participants) VALUES
-('Tech Fest 2024', 'Annual technology festival with competitions, workshops, and exhibitions.', '2024-02-15', '09:00 AM', 'Main Auditorium', 'academic', 500),
-('Career Fair', 'Meet with industry professionals and explore job opportunities.', '2024-02-20', '10:00 AM', 'Exhibition Hall', 'career', 300),
-('Sports Tournament', 'Inter-department sports competition including cricket, football, and basketball.', '2024-03-01', '02:00 PM', 'Sports Complex', 'sports', 200),
-('Cultural Night', 'Showcase your talents in music, dance, and drama.', '2024-03-10', '06:00 PM', 'Open Theater', 'cultural', 400);
