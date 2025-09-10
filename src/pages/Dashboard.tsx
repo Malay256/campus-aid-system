@@ -7,7 +7,9 @@ import { EventsPage } from "@/components/dashboard/EventsPage";
 import { QueriesPage } from "@/components/dashboard/QueriesPage";
 import { StudentToolsPage } from "@/components/dashboard/StudentToolsPage";
 import { ProfilePage } from "@/components/dashboard/ProfilePage";
+import { AdminPanel } from "@/components/dashboard/AdminPanel";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 
 interface DashboardProps {
   onLogout: () => void;
