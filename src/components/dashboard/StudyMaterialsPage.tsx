@@ -22,8 +22,7 @@ type StudyMaterial = {
   created_at: string;
   downloads: number;
   uploaded_by: string | null;
-  access_id: string | null;
-  access_password: string | null;
+  is_protected: boolean;
   icon?: any;
 };
 
@@ -56,7 +55,7 @@ export const StudyMaterialsPage = () => {
   const fetchMaterials = async () => {
     try {
       const { data, error } = await supabase
-        .from('study_materials')
+        .from('study_materials_public')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -119,24 +118,42 @@ export const StudyMaterialsPage = () => {
   };
 
   const handleDownload = async (material: StudyMaterial) => {
-    if (!material.file_path) {
-      toast.error('File not available for download');
-      return;
-    }
-
-    if (material.access_id && material.access_password) {
+    if (material.is_protected) {
       setAccessDialog({ open: true, material });
       return;
     }
 
-    await downloadFile(material);
+    await downloadFile(material, null, null);
   };
 
-  const downloadFile = async (material: StudyMaterial) => {
+  const downloadFile = async (material: StudyMaterial, accessId?: string | null, accessPassword?: string | null) => {
     try {
+      // Use secure function to get file access info
+      const { data: accessInfo, error: accessError } = await supabase.rpc(
+        'get_file_access_info', 
+        {
+          material_id: material.id,
+          provided_access_id: accessId,
+          provided_password: accessPassword
+        }
+      );
+
+      if (accessError) throw accessError;
+      
+      const accessData = accessInfo?.[0];
+      if (!accessData?.access_granted) {
+        toast.error(accessData?.error_message || 'Access denied');
+        return;
+      }
+
+      if (!accessData.file_path) {
+        toast.error('File not available for download');
+        return;
+      }
+
       const { data, error } = await supabase.storage
         .from('study-materials')
-        .download(material.file_path!);
+        .download(accessData.file_path);
 
       if (error) throw error;
 
@@ -175,14 +192,9 @@ export const StudyMaterialsPage = () => {
 
     const { material } = accessDialog;
     
-    if (accessCredentials.id !== material.access_id || accessCredentials.password !== material.access_password) {
-      toast.error('Invalid credentials. Please check your Access ID and Password.');
-      return;
-    }
-
     setAccessDialog({ open: false, material: null });
     setAccessCredentials({ id: '', password: '' });
-    await downloadFile(material);
+    await downloadFile(material, accessCredentials.id, accessCredentials.password);
   };
 
   const handleUserUploadSubmit = async (e: React.FormEvent) => {
@@ -364,12 +376,12 @@ export const StudyMaterialsPage = () => {
                       className="flex-1" 
                       variant="outline"
                       onClick={() => handleDownload(material)}
-                      disabled={!material.file_path}
+                      disabled={!material.file_path && !material.is_protected}
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download
                     </Button>
-                    {material.access_id && material.access_password && (
+                    {material.is_protected && (
                       <div className="flex items-center">
                         <Lock className="h-4 w-4 text-muted-foreground" />
                       </div>

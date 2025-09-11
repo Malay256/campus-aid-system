@@ -115,6 +115,13 @@ export type Database = {
             referencedRelation: "study_materials"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "file_access_logs_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "study_materials_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notices: {
@@ -293,12 +300,65 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      study_materials_public: {
+        Row: {
+          created_at: string | null
+          downloads: number | null
+          file_path: string | null
+          id: string | null
+          is_protected: boolean | null
+          size: string | null
+          subject: string | null
+          title: string | null
+          type: string | null
+          updated_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          downloads?: number | null
+          file_path?: never
+          id?: string | null
+          is_protected?: never
+          size?: string | null
+          subject?: string | null
+          title?: string | null
+          type?: string | null
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          downloads?: number | null
+          file_path?: never
+          id?: string | null
+          is_protected?: never
+          size?: string | null
+          subject?: string | null
+          title?: string | null
+          type?: string | null
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      get_file_access_info: {
+        Args: {
+          material_id: string
+          provided_access_id?: string
+          provided_password?: string
+        }
+        Returns: {
+          access_granted: boolean
+          error_message: string
+          file_path: string
+        }[]
       }
       has_role: {
         Args: {
