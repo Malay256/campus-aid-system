@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Briefcase, Palette, Bot, Globe, FileText, Calculator, Calendar } from "lucide-react";
@@ -80,8 +81,17 @@ const tools = [
 const categories = ["All", "AI Tools", "Design", "Productivity", "Storage", "Organization", "Writing"];
 
 export const StudentToolsPage = () => {
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  
   const handleOpenTool = (url: string, name: string) => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    // Use a more reliable method to open links
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     console.log(`Opening ${name}`);
   };
 
@@ -89,6 +99,8 @@ export const StudentToolsPage = () => {
     if (category === "All") return tools;
     return tools.filter(tool => tool.category === category);
   };
+
+  const displayedTools = getToolsByCategory(selectedCategory);
 
   return (
     <div className="space-y-6">
@@ -108,9 +120,10 @@ export const StudentToolsPage = () => {
         {categories.map(category => (
           <Button
             key={category}
-            variant="outline"
+            variant={selectedCategory === category ? "default" : "outline"}
             size="sm"
             className="rounded-full"
+            onClick={() => setSelectedCategory(category)}
           >
             {category}
           </Button>
@@ -119,7 +132,7 @@ export const StudentToolsPage = () => {
 
       {/* Tools Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tools.map((tool, index) => {
+        {displayedTools.map((tool, index) => {
           const Icon = tool.icon;
           return (
             <Card 
