@@ -12,6 +12,9 @@ import {
   Clock,
   Briefcase
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface DashboardHomeProps {
   studentName: string;
@@ -19,11 +22,152 @@ interface DashboardHomeProps {
 }
 
 export const DashboardHome = ({ studentName, onNavigate }: DashboardHomeProps) => {
+  const { user } = useAuth();
+  const [stats, setStats] = useState({
+    materialsCount: 0,
+    eventsCount: 0,
+    noticesCount: 0,
+    queriesCount: 0
+  });
+  const [recentActivity, setRecentActivity] = useState<Array<{
+    id: string;
+    type: 'material' | 'notice' | 'event';
+    title: string;
+    description: string;
+    timestamp: string;
+    icon: any;
+    color: string;
+  }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchDashboardData();
+    }
+  }, [user]);
+
+  const fetchDashboardData = async () => {
+    if (!user) return;
+
+    try {
+      // Fetch user's materials count
+      const { count: materialsCount } = await supabase
+        .from('study_materials')
+        .select('id', { count: 'exact', head: true })
+        .eq('uploaded_by', user.id);
+
+      // Fetch total events count  
+      const { count: eventsCount } = await supabase
+        .from('events')
+        .select('id', { count: 'exact', head: true });
+
+      // Fetch recent notices count (last 7 days)
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const { count: noticesCount } = await supabase
+        .from('notices')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', weekAgo.toISOString());
+
+      // Fetch user's open queries count
+      const { count: queriesCount } = await supabase
+        .from('queries')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'open');
+
+      setStats({
+        materialsCount: materialsCount || 0,
+        eventsCount: eventsCount || 0,
+        noticesCount: noticesCount || 0,
+        queriesCount: queriesCount || 0
+      });
+
+      // Fetch recent activity
+      const activities: Array<{
+        id: string;
+        type: 'material' | 'notice' | 'event';
+        title: string;
+        description: string;
+        timestamp: string;
+        icon: any;
+        color: string;
+      }> = [];
+
+      // Get recent user materials
+      const { data: recentMaterials } = await supabase
+        .from('study_materials')
+        .select('id, title, subject, created_at')
+        .eq('uploaded_by', user.id)
+        .order('created_at', { ascending: false })
+        .limit(2);
+
+      recentMaterials?.forEach(material => {
+        activities.push({
+          id: material.id,
+          type: 'material',
+          title: 'Material uploaded',
+          description: `${material.subject} - ${material.title}`,
+          timestamp: material.created_at,
+          icon: FileText,
+          color: 'bg-success/10 text-success'
+        });
+      });
+
+      // Get recent notices
+      const { data: recentNotices } = await supabase
+        .from('notices')
+        .select('id, title, category, created_at')
+        .order('created_at', { ascending: false })
+        .limit(2);
+
+      recentNotices?.forEach(notice => {
+        activities.push({
+          id: notice.id,
+          type: 'notice', 
+          title: 'New notice posted',
+          description: notice.title,
+          timestamp: notice.created_at,
+          icon: Bell,
+          color: 'bg-warning/10 text-warning'
+        });
+      });
+
+      // Get recent events
+      const { data: recentEvents } = await supabase
+        .from('events')
+        .select('id, title, category, created_at')
+        .order('created_at', { ascending: false })
+        .limit(2);
+
+      recentEvents?.forEach(event => {
+        activities.push({
+          id: event.id,
+          type: 'event',
+          title: 'New event available',
+          description: event.title,
+          timestamp: event.created_at,
+          icon: Calendar,
+          color: 'bg-accent-purple/10 text-accent-purple'
+        });
+      });
+
+      // Sort by timestamp and take latest 3
+      activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setRecentActivity(activities.slice(0, 3));
+
+    } catch (error: any) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const quickStats = [
-    { label: "Active Courses", value: "6", icon: BookOpen, color: "text-primary" },
-    { label: "Upcoming Events", value: "3", icon: Calendar, color: "text-accent-purple" },
-    { label: "New Notices", value: "5", icon: Bell, color: "text-warning" },
-    { label: "Pending Queries", value: "2", icon: HelpCircle, color: "text-success" },
+    { label: "My Materials", value: stats.materialsCount.toString(), icon: BookOpen, color: "text-primary" },
+    { label: "Available Events", value: stats.eventsCount.toString(), icon: Calendar, color: "text-accent-purple" },
+    { label: "New Notices", value: stats.noticesCount.toString(), icon: Bell, color: "text-warning" },
+    { label: "Open Queries", value: stats.queriesCount.toString(), icon: HelpCircle, color: "text-success" },
   ];
 
   const quickActions = [
@@ -63,6 +207,22 @@ export const DashboardHome = ({ studentName, onNavigate }: DashboardHomeProps) =
       color: "bg-muted text-muted-foreground"
     }
   ];
+
+  const formatTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const past = new Date(timestamp);
+    const diffHours = Math.floor((now.getTime() - past.getTime()) / (1000 * 60 * 60));
+    
+    if (diffHours < 1) return 'Less than an hour ago';
+    if (diffHours === 1) return '1 hour ago';
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    
+    return past.toLocaleDateString();
+  };
 
   return (
     <div className="space-y-6">
@@ -129,35 +289,31 @@ export const DashboardHome = ({ studentName, onNavigate }: DashboardHomeProps) =
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
-            <div className="p-1 bg-success/10 rounded">
-              <FileText className="h-4 w-4 text-success" />
+          {loading ? (
+            <div className="text-center py-4">
+              <p className="text-muted-foreground">Loading recent activity...</p>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium">New study material uploaded</p>
-              <p className="text-xs text-muted-foreground">Mathematics - Calculus Notes • 2 hours ago</p>
+          ) : recentActivity.length > 0 ? (
+            recentActivity.map((activity) => {
+              const Icon = activity.icon;
+              return (
+                <div key={activity.id} className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
+                  <div className={cn("p-1 rounded", activity.color)}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{activity.title}</p>
+                    <p className="text-xs text-muted-foreground">{activity.description} • {formatTimeAgo(activity.timestamp)}</p>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground">No recent activity</p>
+              <p className="text-xs text-muted-foreground">Start by uploading materials or participating in events</p>
             </div>
-          </div>
-          
-          <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
-            <div className="p-1 bg-warning/10 rounded">
-              <Bell className="h-4 w-4 text-warning" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium">New notice posted</p>
-              <p className="text-xs text-muted-foreground">Mid-term exam schedule announced • 4 hours ago</p>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-3 p-3 rounded-lg bg-muted/50">
-            <div className="p-1 bg-accent-purple/10 rounded">
-              <Calendar className="h-4 w-4 text-accent-purple" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium">Event registration opened</p>
-              <p className="text-xs text-muted-foreground">Tech Fest 2024 • Yesterday</p>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Download, Search, Filter, Upload, BookOpen, Video, FileImage, Lock, Key } from "lucide-react";
+import { FileText, Download, Search, Filter, Upload, BookOpen, Video, FileImage, Lock, Key, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/hooks/useRole";
@@ -19,9 +19,12 @@ type StudyMaterial = {
   type: string;
   size: string;
   file_path: string | null;
+  file_url: string | null;
   created_at: string;
   downloads: number;
   uploaded_by: string | null;
+  access_id: string | null;
+  access_password: string | null;
   is_protected: boolean;
   icon?: any;
 };
@@ -50,26 +53,33 @@ export const StudyMaterialsPage = () => {
 
   useEffect(() => {
     fetchMaterials();
-  }, []);
+  }, [user]);
 
   const fetchMaterials = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase
-        .from('study_materials_public')
+        .from('study_materials')
         .select('*')
+        .eq('uploaded_by', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const materialsWithIcons = data.map(material => ({
+      const materialsWithIcons = (data || []).map(material => ({
         ...material,
-        icon: getFileIcon(material.type)
+        icon: getFileIcon(material.type),
+        is_protected: !!(material.access_id && material.access_password)
       }));
 
       setMaterials(materialsWithIcons);
       setFilteredMaterials(materialsWithIcons);
 
-      const uniqueSubjects = ["All Subjects", ...new Set(data.map(m => m.subject))];
+      const uniqueSubjects = ["All Subjects", ...new Set((data || []).map(m => m.subject))];
       setSubjects(uniqueSubjects);
     } catch (error: any) {
       toast.error('Failed to fetch study materials');
@@ -128,32 +138,22 @@ export const StudyMaterialsPage = () => {
 
   const downloadFile = async (material: StudyMaterial, accessId?: string | null, accessPassword?: string | null) => {
     try {
-      // Use secure function to get file access info
-      const { data: accessInfo, error: accessError } = await supabase.rpc(
-        'get_file_access_info', 
-        {
-          material_id: material.id,
-          provided_access_id: accessId,
-          provided_password: accessPassword
+      // For user's own files, check access directly
+      if (material.is_protected && (!accessId || !accessPassword)) {
+        if (material.access_id !== accessId || material.access_password !== accessPassword) {
+          toast.error('Invalid credentials');
+          return;
         }
-      );
-
-      if (accessError) throw accessError;
-      
-      const accessData = accessInfo?.[0];
-      if (!accessData?.access_granted) {
-        toast.error(accessData?.error_message || 'Access denied');
-        return;
       }
 
-      if (!accessData.file_path) {
+      if (!material.file_path) {
         toast.error('File not available for download');
         return;
       }
 
       const { data, error } = await supabase.storage
         .from('study-materials')
-        .download(accessData.file_path);
+        .download(material.file_path);
 
       if (error) throw error;
 
@@ -184,6 +184,45 @@ export const StudyMaterialsPage = () => {
     } catch (error: any) {
       toast.error('Failed to download file');
       console.error('Download error:', error);
+    }
+  };
+
+  const handleDelete = async (material: StudyMaterial) => {
+    if (!user || material.uploaded_by !== user.id) {
+      toast.error('You can only delete your own materials');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this material? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      // Delete from storage first
+      if (material.file_path) {
+        const { error: storageError } = await supabase.storage
+          .from('study-materials')
+          .remove([material.file_path]);
+        
+        if (storageError) {
+          console.error('Storage deletion error:', storageError);
+          // Continue with database deletion even if storage fails
+        }
+      }
+
+      // Delete from database
+      const { error } = await supabase
+        .from('study_materials')
+        .delete()
+        .eq('id', material.id);
+
+      if (error) throw error;
+
+      toast.success('Material deleted successfully');
+      fetchMaterials();
+    } catch (error: any) {
+      toast.error('Failed to delete material');
+      console.error('Delete error:', error);
     }
   };
 
@@ -275,7 +314,7 @@ export const StudyMaterialsPage = () => {
             <DialogHeader>
               <DialogTitle>Upload a New Material</DialogTitle>
               <DialogDescription>
-                This material will only be visible to you.
+                Upload your personal study materials. Only you will be able to see and download these files.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleUserUploadSubmit} className="space-y-4">
@@ -381,11 +420,14 @@ export const StudyMaterialsPage = () => {
                       <Download className="h-4 w-4 mr-2" />
                       Download
                     </Button>
-                    {material.is_protected && (
-                      <div className="flex items-center">
-                        <Lock className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    )}
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => handleDelete(material)}
+                      className="flex-shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
