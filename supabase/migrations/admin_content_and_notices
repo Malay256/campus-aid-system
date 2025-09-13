@@ -1,0 +1,25 @@
+-- General SELECT policy for all authenticated users
+CREATE POLICY "Allow all authenticated users to view notices"
+ON public.notices
+FOR SELECT
+TO authenticated
+USING (true);
+
+-- Admin-only policies for INSERT, UPDATE, DELETE
+CREATE POLICY "Allow admins to insert notices"
+ON public.notices
+FOR INSERT
+TO authenticated
+WITH CHECK (public.has_role(auth.uid(), 'admin'::app_role));
+
+CREATE POLICY "Allow admins to update notices"
+ON public.notices
+FOR UPDATE
+TO authenticated
+USING (public.has_role(auth.uid(), 'admin'::app_role));
+
+CREATE POLICY "Allow admins to delete notices"
+ON public.notices
+FOR DELETE
+TO authenticated
+USING (public.has_role(auth.uid(), 'admin'::app_role));
