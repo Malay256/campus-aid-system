@@ -4,9 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { User, Mail, Calendar, Settings, Save, Edit } from "lucide-react";
-import { useState } from "react";
+import { User, Mail, Calendar, Settings, Save, Edit, BookOpen, Download, HelpCircle } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ProfilePageProps {
   studentData: any;
@@ -20,10 +22,42 @@ export const ProfilePage = ({ studentData }: ProfilePageProps) => {
     age: studentData?.age || "",
     gender: studentData?.gender || ""
   });
+  const [stats, setStats] = useState({
+    eventsRegistered: 0,
+    materialsDownloaded: 0,
+    queriesSubmitted: 0
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+  const { user } = useAuth();
   const { toast } = useToast();
 
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!user) return;
+
+      try {
+        const [eventsRes, downloadsRes, queriesRes] = await Promise.all([
+          supabase.from('event_registrations').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+          supabase.from('file_access_logs').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+          supabase.from('queries').select('id', { count: 'exact', head: true }).eq('user_id', user.id)
+        ]);
+
+        setStats({
+          eventsRegistered: eventsRes.count || 0,
+          materialsDownloaded: downloadsRes.count || 0,
+          queriesSubmitted: queriesRes.count || 0
+        });
+      } catch (error) {
+        console.error("Error fetching profile stats:", error);
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+
+    fetchStats();
+  }, [user]);
+
   const handleSave = () => {
-    // Update localStorage with new data
     const updatedStudent = { ...studentData, ...formData };
     localStorage.setItem("student", JSON.stringify(updatedStudent));
     
@@ -36,7 +70,6 @@ export const ProfilePage = ({ studentData }: ProfilePageProps) => {
   };
 
   const handleCancel = () => {
-    // Reset form data to original values
     setFormData({
       name: studentData?.name || "",
       email: studentData?.email || "",
@@ -194,21 +227,17 @@ export const ProfilePage = ({ studentData }: ProfilePageProps) => {
           <CardDescription>Your activity overview</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
             <div className="space-y-1">
-              <p className="text-2xl font-bold text-primary">6</p>
-              <p className="text-sm text-muted-foreground">Courses Enrolled</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-2xl font-bold text-success">12</p>
-              <p className="text-sm text-muted-foreground">Materials Downloaded</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-2xl font-bold text-accent-purple">3</p>
+              <p className="text-2xl font-bold text-accent-purple">{loadingStats ? '...' : stats.eventsRegistered}</p>
               <p className="text-sm text-muted-foreground">Events Registered</p>
             </div>
             <div className="space-y-1">
-              <p className="text-2xl font-bold text-warning">4</p>
+              <p className="text-2xl font-bold text-success">{loadingStats ? '...' : stats.materialsDownloaded}</p>
+              <p className="text-sm text-muted-foreground">Materials Downloaded</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-2xl font-bold text-warning">{loadingStats ? '...' : stats.queriesSubmitted}</p>
               <p className="text-sm text-muted-foreground">Queries Submitted</p>
             </div>
           </div>
