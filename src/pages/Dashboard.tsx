@@ -21,8 +21,15 @@ interface DashboardProps {
 export const Dashboard = ({ onLogout }: DashboardProps) => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const { user, profile, signOut } = useAuth();
-  const { isAdmin } = useRole();
+  const { isAdmin, loading: roleLoading } = useRole();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Auto-redirect admin users to admin panel
+  useEffect(() => {
+    if (!roleLoading && isAdmin && activeTab === "dashboard") {
+      setActiveTab("admin");
+    }
+  }, [isAdmin, roleLoading, activeTab]);
 
   const handleLogout = async () => {
     await signOut();
