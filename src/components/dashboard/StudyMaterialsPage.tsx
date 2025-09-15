@@ -65,6 +65,7 @@ export const StudyMaterialsPage = () => {
       const { data, error } = await supabase
         .from('study_materials')
         .select('*')
+        .eq('uploaded_by', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
