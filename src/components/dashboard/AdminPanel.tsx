@@ -13,7 +13,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { AdminAnalytics } from "./AdminAnalytics";
-import { AdminQueriesPage } from "./AdminQueriesPage";
 
 export const AdminPanel = () => {
   const [activeUpload, setActiveUpload] = useState<string | null>(null);
@@ -191,7 +190,6 @@ export const AdminPanel = () => {
           <TabsTrigger value="notices">Notices</TabsTrigger>
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="queries">Help Desk Queries</TabsTrigger>
         </TabsList>
 
         <TabsContent value="materials" className="space-y-4">
@@ -514,9 +512,6 @@ export const AdminPanel = () => {
 
         <TabsContent value="analytics" className="space-y-4">
           <AdminAnalytics />
-        </TabsContent>
-        <TabsContent value="queries" className="space-y-4">
-          <AdminQueriesPage />
         </TabsContent>
       </Tabs>
     </div>
